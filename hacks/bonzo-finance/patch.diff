@@ -1,0 +1,30 @@
+diff -ru src-pre/src/SupraSValueFeedVerifier.sol src-current/src/SupraSValueFeedVerifier.sol
+--- src-pre/src/SupraSValueFeedVerifier.sol	2026-08-15 08:44:07
++++ src-current/src/SupraSValueFeedVerifier.sol	2026-08-15 08:44:08
+@@ -131,7 +131,7 @@
+ 
+     mapping(uint256 committee_id => uint256[4] public_key) private committee_public_key;
+     // Max Future time is 3sec from the current block time.
+-    uint256 public constant TIME_DELTA_ALLOWANCE = 15000;
++    uint256 public constant TIME_DELTA_ALLOWANCE = 3000;
+ 
+     /// @notice It will put log to the individual free node wallets those added to the whitelist
+     /// @dev It will be emitted once the free node is added to the whitelist
+@@ -315,7 +315,16 @@
+     function requireHashVerified_V2(bytes32 _message, uint256[2] calldata _signature, uint256 committee_id)
+         public
+         view
+-    {
++    {   
++        if (_signature[0] == 0 && _signature[1] == 0) {
++            revert BLSInvalidPublicKeyorSignaturePoints();
++        }
++
++        uint256[4] memory pubKey = committee_public_key[committee_id];
++        if (pubKey[0] == 0 && pubKey[1] == 0 && pubKey[2] == 0 && pubKey[3] == 0) {
++            revert BLSInvalidPublicKeyorSignaturePoints();
++        }
++
+         bool callSuccess;
+         bool checkSuccess;
+         (checkSuccess, callSuccess) = BLS.verifySingle(
