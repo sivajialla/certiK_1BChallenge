@@ -69,6 +69,35 @@
      the price-update path (`requireHashVerified_V2`) the attacker actually used
 - Conclusion: Lite did not surface the exploited vulnerability. Per rule 03, escalate to Max.
 
+### Max — 2026-08-15 — MISSED (full miss, both tiers)
+- Task ID: `43fc336e-3090-5334-a4f4-c12e5e4ab1ef`
+- 8 findings returned, none touching `requireHashVerified_V2` (line 315+) or its missing
+  zero-signature/zero-pubkey check — every finding is about the V1/vote-consensus path
+  (`requireVoteVerified`, `requireHashVerified_V1`, `publicKey`), `processCluster`'s round/replay
+  bookkeeping, or the broken `Ownable` init — none of it the price-update path the attacker used:
+  1. [Discussion] `requireVoteVerified` hardcoded to V1, inconsistent with multi-committee design
+     (205-212)
+  2. [Discussion] `updatePublicKey` key rotation can freeze the round gate (262-271)
+  3. [Discussion] vote hash has no chain-id/contract binding, replayable across deployments
+     sharing `domain`+`publicKey` (91-99) — closest any finding gets to V2 is a passing remark
+     that "V1's `bytes.concat(bytes32)` and V2's `abi.encode(bytes32)` are byte-identical," which
+     is about message-encoding equivalence, not the missing zero-point check
+  4. [Discussion] equal-round cluster overwrite, last-writer-wins (265-267)
+  5. [Major] same broken `Ownable2Step_init()` as Lite finding 1 (186)
+  6. [Discussion] unvalidated feed-storage address can brick updates (188)
+  7. [Minor] write-nothing cluster can block co-committed updates via the transaction-wide replay
+     guard (243-253)
+  8. [Medium] `verifiedVotes` cache not invalidated on key rotation — same bug as Lite finding 2,
+     re-surfaced with a fuller PoC (line 126 cited, but describes the same `requireVoteVerified`
+     function at 205-212)
+- Conclusion: **both Lite and Max missed the exploited vulnerability.** The real bug — no check
+  that `_signature` or `committee_public_key[committee_id]` is non-zero before trusting
+  `BLS.verifySingle`'s pairing result — never appears in either report, despite ground-truth
+  verified source (not a reconstruction) and a real, confirmed $9.05M loss. This is a genuine
+  challenge-relevant miss on both tiers, worth flagging separately from the claim itself per the
+  "misses are funded" note in rule 05 — worth asking in the challenge Discord whether/how to
+  report a confirmed two-tier miss like this, distinct from submitting a claim.
+
 ## Attack walkthrough
 1. Attacker (`0x9A4966152F6e10b33Cb7a37975e8619816d6a494`) deposits 250 SAUCE (a few dollars) as
    collateral into Bonzo's LendingPool — legitimate, small, just to have a borrowable position.
