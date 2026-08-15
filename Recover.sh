@@ -28,11 +28,11 @@ SLOT_BEACON=0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50
 SLOT_ADMIN=0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103
 
 case "$CHAIN" in
-  ethereum) RPC="${ETH_RPC_URL:?set ETH_RPC_URL}";      KEY="${ETHERSCAN_API_KEY:?}" ;;
-  bsc)      RPC="${BSC_RPC_URL:?set BSC_RPC_URL}";      KEY="${ETHERSCAN_API_KEY:?}" ;;
-  polygon)  RPC="${POLYGON_RPC_URL:?set POLYGON_RPC_URL}"; KEY="${ETHERSCAN_API_KEY:?}" ;;
-  arbitrum) RPC="${ARB_RPC_URL:?set ARB_RPC_URL}";      KEY="${ETHERSCAN_API_KEY:?}" ;;
-  base)     RPC="${BASE_RPC_URL:?set BASE_RPC_URL}";    KEY="${ETHERSCAN_API_KEY:?}" ;;
+  ethereum) RPC="${ETH_RPC_URL:?set ETH_RPC_URL}";      KEY="${ETHERSCAN_API_KEY:?}"; CAST_CHAIN=mainnet;  CHAIN_ID=1 ;;
+  bsc)      RPC="${BSC_RPC_URL:?set BSC_RPC_URL}";      KEY="${ETHERSCAN_API_KEY:?}"; CAST_CHAIN=bsc;      CHAIN_ID=56 ;;
+  polygon)  RPC="${POLYGON_RPC_URL:?set POLYGON_RPC_URL}"; KEY="${ETHERSCAN_API_KEY:?}"; CAST_CHAIN=polygon; CHAIN_ID=137 ;;
+  arbitrum) RPC="${ARB_RPC_URL:?set ARB_RPC_URL}";      KEY="${ETHERSCAN_API_KEY:?}"; CAST_CHAIN=arbitrum; CHAIN_ID=42161 ;;
+  base)     RPC="${BASE_RPC_URL:?set BASE_RPC_URL}";    KEY="${ETHERSCAN_API_KEY:?}"; CAST_CHAIN=base;     CHAIN_ID=8453 ;;
   *) echo "unknown chain: $CHAIN" >&2; exit 1 ;;
 esac
 
@@ -76,15 +76,22 @@ if [[ -z "$IMPL_PRE" ]]; then
 fi
 
 echo "==> upgrade history"
-cast logs --address "$ADDR" 'Upgraded(address)' --rpc-url "$RPC" \
-  | tee "$DIR/upgrades.log" | grep -E 'blockNumber|topics' || echo "    (none found)"
+# Etherscan's log API has no block-range cap, unlike eth_getLogs on most
+# RPC free tiers (e.g. Alchemy limits unbounded queries to 10 blocks).
+TOPIC_UPGRADED=$(cast keccak "Upgraded(address)")
+curl -s "https://api.etherscan.io/v2/api?chainid=$CHAIN_ID&module=logs&action=getLogs&address=$ADDR&topic0=$TOPIC_UPGRADED&fromBlock=0&toBlock=latest&apikey=$KEY" \
+  | jq -r '.result[]? | [.blockNumber, .transactionHash, ("0x" + .topics[1][-40:])] | @tsv' \
+  | while IFS=$'\t' read -r blk tx impl; do
+      printf 'block %-10d impl %s  tx %s\n' "$((blk))" "$impl" "$tx"
+    done | tee "$DIR/upgrades.log"
+[[ -s "$DIR/upgrades.log" ]] || echo "    (none found)"
 
 echo "==> pulling source"
-cast etherscan-source -d "$DIR/src-pre" "$IMPL_PRE" --etherscan-api-key "$KEY" --chain "$CHAIN" \
+cast source -d "$DIR/src-pre" "$IMPL_PRE" --etherscan-api-key "$KEY" --chain "$CAST_CHAIN" \
   || echo "!!  unverified — copy manually from the explorer into $DIR/src-pre"
 
 if [[ "$IMPL_NOW" != "$IMPL_PRE" && -n "$IMPL_NOW" ]]; then
-  cast etherscan-source -d "$DIR/src-current" "$IMPL_NOW" --etherscan-api-key "$KEY" --chain "$CHAIN" || true
+  cast source -d "$DIR/src-current" "$IMPL_NOW" --etherscan-api-key "$KEY" --chain "$CAST_CHAIN" || true
   diff -ru "$DIR/src-pre" "$DIR/src-current" > "$DIR/patch.diff" 2>/dev/null || true
   echo "    wrote patch.diff — this is the fix, and your write-up material"
 else
