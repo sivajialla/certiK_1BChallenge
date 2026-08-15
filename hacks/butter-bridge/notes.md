@@ -43,13 +43,28 @@
   so an attacker-chosen retry payload with rearranged field boundaries collides with a
   previously-stored commitment hash it was never actually authorized to satisfy.
 - Smart contract bug? Yes
-- Scan ID: <fill in after running AI Auditor Lite on scan/BridgeAbstract.sol>
-- Tier: Lite
-- Finding title (verbatim): <fill in from AI Auditor's finding list>
+- Scan ID: <pending — Lite missed, see scan log below; run Max next>
+- Tier: Max (Lite already run and missed, see below)
+- Finding title (verbatim): <fill in once a finding names _storeMessageData / _getStoredMessage>
 - Why this finding is the bug: The finding must name the hash-collision / weak-message-binding
   pattern in `_getStoredMessage`'s `retryHash` check (BridgeAbstract.sol:481-495) or the matching
   commit-hash construction in `_storeMessageData` (BridgeAbstract.sol:431-446) — this is the exact
   code path `retryMessageIn` calls, and the fix commit changed nothing else.
+
+## AI Auditor scan log
+
+### Lite — 2026-08-15 — MISSED
+- Task ID: `50d9edae-9ec2-5555-bc84-403108659c80`
+- 6 findings returned, none touching lines 425-504 (`_storeMessageData` / `_getStoredMessage`,
+  where the actual bug is). All are plausible-looking but address different functions:
+  1. [Discussion] unhandled `onReceived` revert in `_swapIn` (269-281)
+  2. [Info] missing orderId validation / replay in `_messageOut` (374-375)
+  3. [Discussion] relayer gas griefing in `_transferIn` (231-246) — right call path, wrong bug
+  4. [Discussion] unrefunded excess `msg.value` in `_transferOut` (221-224)
+  5. [Discussion] unbounded bit-packed chain/gas fields in `_getChainAndGasLimit` (564-570)
+  6. [**Critical**] reentrancy in `withdrawFee` (168-171) — real-looking, but not what was
+     exploited; the attack never called `withdrawFee`
+- Conclusion: Lite did not surface the exploited vulnerability. Per rule 03, escalate to Max.
 
 ## Attack walkthrough
 1. Attacker originates a real, oracle-multisig-signed MAP-relay-chain message addressed to a
