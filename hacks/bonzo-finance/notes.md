@@ -43,8 +43,8 @@
   genuinely-empty signature checked against an unregistered (all-zero, default-value) committee
   public key — the verifier accepted this as a valid signature instead of rejecting it outright.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: Lite
+- Scan ID: <pending — Lite missed, see scan log below; run Max next>
+- Tier: Max (Lite already run and missed, see below)
 - Finding title (verbatim): <fill in once a finding names requireHashVerified_V2's missing
   zero-point check>
 - Why this finding is the bug: The finding must name the missing check in
@@ -53,6 +53,21 @@
   validated as non-zero/non-identity before the pairing check. This is the exact one-function
   code path the attacker's forged oracle-update transaction went through, and it's the only
   function the real fix commit touched.
+
+## AI Auditor scan log
+
+### Lite — 2026-08-15 — MISSED
+- Task ID: `a7874b28-0ab5-5f48-b0ba-19ef207e61e4`
+- 2 findings returned, neither touching `requireHashVerified_V2` (~line 315-330, where the fix
+  added the zero-signature/zero-pubkey checks):
+  1. [Major] `initialize()` never calls `__Ownable_init()`, so `owner()` stays the zero address
+     forever, permanently locking all `onlyOwner` functions (line 186) — real bug, but the attack
+     never called any owner-restricted function
+  2. [Medium] `requireVoteVerified`'s `verifiedVotes[smrVoteHash]` cache isn't invalidated when
+     `updatePublicKey` rotates the committee key, so a vote signed by a revoked key stays valid
+     (205-212) — real bug, but this is the SMR/vote-consensus path (`requireHashVerified_V1`), not
+     the price-update path (`requireHashVerified_V2`) the attacker actually used
+- Conclusion: Lite did not surface the exploited vulnerability. Per rule 03, escalate to Max.
 
 ## Attack walkthrough
 1. Attacker (`0x9A4966152F6e10b33Cb7a37975e8619816d6a494`) deposits 250 SAUCE (a few dollars) as
