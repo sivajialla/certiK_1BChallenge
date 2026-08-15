@@ -21,6 +21,17 @@
   4. confirmed: `diff -ru src-pre src-current` shows **only `BridgeAbstract.sol` changed** in the
      fix — matches expectation, single suspect file
 
+## Attribution (confirmed via Blockaid, @blockaid_ on X, 2026-05-20)
+- exploit tx: 0x31e56b4737649e0acdb0ebb4eca44d16aeca25f60c022cbde85f092bde27664a — block 25137572,
+  2026-05-20 04:13 PM UTC, fee 0.00003148 ETH
+- attacker EOA: 0x40592025392BD7d7463711c6E82Ed34241B64279
+- exploit contract: 0x2475396A308861559EF30dc46aad6136367a1C30
+- MAPO token: 0x66D79B8f60ec93Bfce0b56F5Ac14A2714E509a99
+- realized loss: 52.21 ETH (~$180K) drained from the Uniswap V4 ETH/MAPO pool after the attacker
+  dumped 1B of the minted MAPO into it
+- unrealized/dilution risk: ~999.999B MAPO (of the 1e15 minted) still held by the attacker —
+  continued risk to any MAPO pool or CEX listing
+
 ## Claim form fields
 - Protocol / project: MAP Protocol — Butter Bridge / OmniService (MOSV3)
 - Amount lost (digits only): 180000
@@ -73,3 +84,6 @@
   https://github.com/butternetwork/butter-mos-contracts/commit/834cd8bfa8
 - loss figure source: https://www.cryptotimes.io/2026/05/21/map-bridge-exploit-1-quadrillion-mapo-minted-in-cross-chain-attack/
   ; https://cointelegraph.com/news/map-protocol-loses-96-of-its-value-after-quadrillion-token-mint-exploit
+  ; Blockaid (@blockaid_) on X, 2026-05-20 — real-time on-chain monitoring, independently confirms
+  tx hash / attacker / exploit contract / MAPO token addresses and the 52.21 ETH (~$180K) realized
+  loss from the Uniswap V4 pool
