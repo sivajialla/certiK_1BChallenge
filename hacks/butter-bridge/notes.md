@@ -54,6 +54,13 @@
   hash, passing `_getStoredMessage`'s `retryHash == orderList[_orderId]` check while decoding to
   different field values. This is precisely how the attacker forged the retried message that
   `retryMessageIn` → `_transferIn` → `mapoExecute` used to mint 1e33 wei of MAPO.
+- Severity note: AI Auditor rated this finding **Info**, not Critical/High — because the scan was
+  scoped to `BridgeAbstract.sol` alone per rule 03, where `retryMessageIn` is an empty `virtual`
+  stub, so the tool couldn't prove external reachability into the concrete override in
+  `Bridge.sol`. Confirmed with the challenge team that the finding is still claimable as-is: rule
+  04 only requires the finding to name the bug actually exploited, not hit a severity threshold,
+  and the real-world impact (~$180K minted/drained) is well established independently of the
+  tool's conservative rating.
 
 ## AI Auditor scan log
 
