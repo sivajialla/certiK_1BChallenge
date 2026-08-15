@@ -43,18 +43,22 @@
   so an attacker-chosen retry payload with rearranged field boundaries collides with a
   previously-stored commitment hash it was never actually authorized to satisfy.
 - Smart contract bug? Yes
-- Scan ID: <pending — Lite missed, see scan log below; run Max next>
-- Tier: Max (Lite already run and missed, see below)
-- Finding title (verbatim): <fill in once a finding names _storeMessageData / _getStoredMessage>
-- Why this finding is the bug: The finding must name the hash-collision / weak-message-binding
-  pattern in `_getStoredMessage`'s `retryHash` check (BridgeAbstract.sol:481-495) or the matching
-  commit-hash construction in `_storeMessageData` (BridgeAbstract.sol:431-446) — this is the exact
-  code path `retryMessageIn` calls, and the fix commit changed nothing else.
+- Scan ID: `b733a1ed-5ac2-5ad0-b609-bce86ad7270a` (Max)
+- Tier: Max
+- Finding title (verbatim): [Discussion] Ambiguous packed retry commitment enables spoofed
+  retried-message fields
+- Why this finding is the bug: The finding names the exact mechanism — `_storeMessageData` /
+  `_getStoredMessage` commit to `keccak256(abi.encodePacked(...))` over four consecutive dynamic
+  `bytes` fields (initiator, `from`/`_fromAddress`, `to`, `swapData`) with no length delimiters,
+  so a differently-segmented retry payload can reproduce the identical packed byte string and
+  hash, passing `_getStoredMessage`'s `retryHash == orderList[_orderId]` check while decoding to
+  different field values. This is precisely how the attacker forged the retried message that
+  `retryMessageIn` → `_transferIn` → `mapoExecute` used to mint 1e33 wei of MAPO.
 
 ## AI Auditor scan log
 
 ### Lite — 2026-08-15 — MISSED
-- Task ID: `50d9edae-9ec2-5555-bc84-403108659c80`
+- Task ID: `50d9edae-9ec2-5555-bc84-403108659c80` [https://aiauditor.certik.com/en/scan/d2b140d4-548d-4f66-b4a0-d71d619a4414]
 - 6 findings returned, none touching lines 425-504 (`_storeMessageData` / `_getStoredMessage`,
   where the actual bug is). All are plausible-looking but address different functions:
   1. [Discussion] unhandled `onReceived` revert in `_swapIn` (269-281)
@@ -65,6 +69,22 @@
   6. [**Critical**] reentrancy in `withdrawFee` (168-171) — real-looking, but not what was
      exploited; the attack never called `withdrawFee`
 - Conclusion: Lite did not surface the exploited vulnerability. Per rule 03, escalate to Max.
+
+### Max — 2026-08-15 — CAUGHT
+- Task ID: `b733a1ed-5ac2-5ad0-b609-bce86ad7270a`
+- 4 findings returned:
+  1. **[Discussion] Ambiguous packed retry commitment enables spoofed retried-message fields**
+     (lines 433-444, `_storeMessageData`/`_getStoredMessage`) — **this is the exploited bug.**
+     Names the four-dynamic-bytes-field `abi.encodePacked` collision exactly, quotes
+     `_getStoredMessage` verbatim, and its PoC (re-split `initiator`/`from`/`to`/`swapData`
+     boundaries to forge a retry that collides with a stored commitment) matches the real attack.
+  2. [Discussion] unbounded revert data in `_transferIn` can exhaust relayer gas (254-258)
+  3. [Discussion] swapped assets finalized despite `onReceived` callback failure in `_swapIn`
+     (269-281) — same issue as Lite finding 1
+  4. [**Critical**] reentrancy in `withdrawFee` (169-171) — same issue as Lite finding 6; real
+     historical bug, but already fixed by the same commit (`834cd8bfa8` added `nonReentrant`) and
+     not what was exploited here
+- Conclusion: Max caught it. Finding 1 is the claim.
 
 ## Attack walkthrough
 1. Attacker originates a real, oracle-multisig-signed MAP-relay-chain message addressed to a
