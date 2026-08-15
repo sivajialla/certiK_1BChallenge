@@ -1,0 +1,99 @@
+diff -ru src-pre/contracts/abstract/BridgeAbstract.sol src-current/Bridge/contracts/abstract/BridgeAbstract.sol
+--- src-pre/contracts/abstract/BridgeAbstract.sol	2026-08-14 23:15:54
++++ src-current/Bridge/contracts/abstract/BridgeAbstract.sol	2026-08-14 23:03:26
+@@ -105,7 +105,7 @@
+     function initialize(address _wToken, address _defaultAdmin) public initializer {
+         _checkAddress(_wToken);
+         // _checkAddress(_defaultAdmin);
+-        Helper._isContract(_defaultAdmin);
++        if(!Helper._isContract(_defaultAdmin)) revert not_contract();
+         __Pausable_init();
+         __ReentrancyGuard_init();
+         __AccessManaged_init(_defaultAdmin);
+@@ -164,7 +164,7 @@
+     }
+ 
+     // --------------------------------------------- external ---------------------------------------------
+-    function withdrawFee(address receiver, address token) external payable {
++    function withdrawFee(address receiver, address token) external payable nonReentrant {
+         uint256 amount = feeList[receiver][token];
+         if (amount > 0) {
+             _tokenTransferOut(token, receiver, amount, true);
+@@ -428,22 +428,7 @@
+         bytes memory _reason,
+         uint256 _chainAndGasLimit
+     ) internal {
+-        orderList[_inEvent.orderId] = uint256(
+-            keccak256(
+-                abi.encodePacked(
+-                    _inEvent.messageType,
+-                    _inEvent.fromChain,
+-                    _inEvent.toChain,
+-                    _inEvent.token,
+-                    _inEvent.amount,
+-                    _inEvent.gasLimit,
+-                    _initiator,
+-                    _inEvent.from,
+-                    _inEvent.to,
+-                    _inEvent.swapData
+-                )
+-            )
+-        );
++        orderList[_inEvent.orderId] = uint256(_getStoreMessageHash(_initiator, _inEvent));
+         bytes memory payload = abi.encode(
+             _inEvent.messageType,
+             _inEvent.gasLimit,
+@@ -477,21 +462,11 @@
+             _swapData,
+             (uint8, uint256, bytes, bytes, bytes)
+         );
+-
+-        bytes32 retryHash = keccak256(
+-            abi.encodePacked(
+-                inEvent.messageType,
+-                inEvent.fromChain,
+-                inEvent.toChain,
+-                _token,
+-                _amount,
+-                inEvent.gasLimit,
+-                initiator,
+-                _fromAddress,
+-                inEvent.to,
+-                inEvent.swapData
+-            )
+-        );
++        inEvent.token = _token;
++        inEvent.amount = _amount;
++        inEvent.from = _fromAddress;
++        bytes32 retryHash = _getStoreMessageHash(initiator, inEvent);
++        
+         if (uint256(retryHash) != orderList[_orderId]) revert retry_verify_fail();
+ 
+         //inEvent.fromChain = _fromChain;
+@@ -501,6 +476,26 @@
+         inEvent.from = _fromAddress;
+ 
+         orderList[_orderId] = 0x01;
++    }
++    function _getStoreMessageHash(
++        bytes memory _initiator,
++        MessageInEvent memory inEvent
++    ) internal pure returns (bytes32 hash) {
++        hash = keccak256(
++            abi.encode(
++                inEvent.messageType,
++                inEvent.fromChain,
++                inEvent.toChain,
++                inEvent.token,
++                inEvent.amount,
++                inEvent.gasLimit,
++                _initiator,
++                inEvent.from,
++                inEvent.to,
++                keccak256(inEvent.swapData)
++            )
++        );
++        
+     }
+ 
+     function _getOrderId(
