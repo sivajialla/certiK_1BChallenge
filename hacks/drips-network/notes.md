@@ -33,13 +33,31 @@
   pay the caller," negative means "pull `amt` from the caller into the hub." The crafted input
   flips `give()` from its intended "caller pays" direction into "reserve pays caller."
 - Smart contract bug? Yes
-- Scan ID: <pending>
+- Scan ID: `31d88fc3-2a4c-53ed-b9c3-01b9018aacaf` (Lite)
 - Tier: Lite
-- Finding title (verbatim): <fill in once a finding names _give / _transfer's signed-conversion>
-- Why this finding is the bug: The finding must name the unchecked `int128(amt)` conversion in
-  `_give` (line ~1387) or the sign-branching in `_transfer` (line ~2130) — this exact pair is the
-  entire vulnerable code path `give(address,uint128)` reaches, and it's the only mechanism by
-  which a `give()` call can withdraw from the reserve instead of depositing into it.
+- Finding title (verbatim): Unchecked `uint128` to `int128` Cast Enables Reserve Draining and
+  Unbacked Credits
+- Why this finding is the bug: The finding names `_give`'s unchecked `-int128(amt)` conversion
+  (scan/Contract.sol:1381) and traces exactly how it reaches `ERC20DripsHub._transfer`'s
+  withdrawal branch — the same mechanism used in the real attack: a `uint128 amt` above
+  `type(int128).max` reinterprets as negative, so negating it produces a positive `_transfer`
+  argument that withdraws from the reserve and pays the caller instead of collecting from them.
+  The finding's own PoC (`amt = 2**128 - S`) matches the actual exploit's crafted input exactly.
+
+## AI Auditor scan log
+
+### Lite — 2026-08-15 — CAUGHT (first try)
+- Task ID: `31d88fc3-2a4c-53ed-b9c3-01b9018aacaf`
+- 2 findings returned:
+  1. [Discussion] `setReserve` reserve-rotation can strand liquidity if an unfunded reserve is
+     swapped in (2117-2123) — real operational-risk observation, but admin-trusted and not what
+     was exploited
+  2. **[Critical] Unchecked `uint128` to `int128` cast enables reserve draining and unbacked
+     credits** (line 1381, `_give`) — **this is the exploited bug.** Unlike butter-bridge, the
+     entire call chain (`give` → `_give` → `_transfer`) is self-contained in the single scanned
+     file, so Max wasn't needed — Lite had full reachability information and rated it Critical
+     immediately.
+- Conclusion: Lite caught it. Finding 2 is the claim.
 
 ## Attack walkthrough
 1. Reserve (`0xf9bbb2df44cfe46e501cf91c99b2f8fef9d9d44a`) holds `B` DAI backing the hub.
