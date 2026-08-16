@@ -45,19 +45,45 @@
   liquidation opportunity and pays out the attacker's second account (acting as "liquidator") a
   large discount/yield — funded by the pool's own real depositor funds, not the attacker's capital.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
-- Why this finding is the bug: The finding must name `donateToReserves`'s missing solvency check —
-  the fact that it moves collateral into `reserveBalance` without calling any liquidity/health
-  check — as the mechanism that lets an account manufacture its own bad-debt liquidation
-  opportunity, which `Liquidation.liquidate` then pays out without requiring the "liquidator" to
-  supply real upfront capital. This is the exact sequence — `donateToReserves` then
-  `checkLiquidation`/`liquidate` on the same attacker-controlled positions — observed in the real
-  exploit transaction's trace.
+- Scan ID: `8e2d050f-483b-5bcd-8db5-81375e68ab57` (Lite)
+- Tier: Lite
+- Finding title (verbatim): [Discussion] Unchecked donateToReserves permits intentional
+  undercollateralization and reserve-funded liquidation losses
+- Why this finding is the bug: The finding names `donateToReserves`'s missing `checkLiquidity`
+  call as the mechanism letting a borrower donate away collateral while still carrying debt, and
+  its PoC reproduces the real attack sequence step-for-step: self-borrow to build a leveraged
+  position, `donateToReserves` most of the eToken balance with no solvency check, then liquidate
+  the now-underwater account from a separate attacker-controlled address to collect the payout.
+  This is exactly the `donateToReserves` → `checkLiquidation`/`liquidate` sequence observed in the
+  real exploit transaction's trace.
+- Severity note: AI Auditor rated this finding **Discussion**, not Critical/High — it explicitly
+  hedges that it couldn't fully confirm the "reserve-funded liquidation loss" consequence from the
+  scanned files alone (liquidation payout mechanics weren't fully traceable within scope). Per the
+  same precedent as butter-bridge's Info-severity catch, rule 04 only requires the finding to name
+  the bug actually exploited, not hit a severity threshold — the root-cause mechanism named here is
+  exactly correct.
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-16 — CAUGHT (first try)
+- Task ID: `8e2d050f-483b-5bcd-8db5-81375e68ab57`
+- 5 findings returned:
+  1. **[Discussion] Unchecked donateToReserves permits intentional undercollateralization and
+     reserve-funded liquidation losses** (EToken.sol:379-385) — **this is the exploited bug.**
+     Names the missing `checkLiquidity(account)` call in `donateToReserves` exactly, and its PoC
+     (self-borrow → donate → liquidate from a second address) matches the real attack's structure.
+  2. [Major] Withdrawals fail to account for sender-side transfer fees (`withdraw`/`pushTokens`,
+     EToken.sol:190-195) — real but unrelated fee-on-transfer accounting bug, not what was
+     exploited.
+  3. [Info] Reserve fee is lost when reserve accounting caps are exceeded (`increaseReserves`,
+     BaseLogic.sol:535-538) — real but unrelated silent-cap-skip bug.
+  4. [Discussion/Info] Average-liquidity decay can be slowed by zero-value transfers
+     (`getUpdatedAverageLiquidity`, BaseLogic.sol:600-611) — real but unrelated, and the tool
+     itself notes no reachable code path establishes the prerequisite state in the scanned files.
+  5. [Major] First-depositor exchange rate inflation enables zero-share deposits (`deposit`,
+     BaseLogic.sol:197-202) — a real, classic ERC4626-style share-inflation bug, but unrelated to
+     the donation/self-liquidation mechanism actually exploited.
+- Conclusion: **Lite caught it on the first try.** Finding 1 is the claim.
 
 ## Attack walkthrough
 1. Attacker flash-loans 30M DAI (via a chain of Aave → another lender's flash loan facility, per
