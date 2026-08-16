@@ -95,6 +95,21 @@
   `BLS.verifySingle`'s pairing result — never appears in either report, despite ground-truth
   verified source (not a reconstruction) and a real, confirmed $9.05M loss.
 
+### Team feedback — 2026-08-15 (BradMoon, CertiK team chat)
+Re-reviewed the raw Max/Ultra outputs on request. Conclusion: the vulnerability **was** identified
+internally by the scanner, but got marked `verified_as_invalid` during the validation stage. Root
+cause of the misclassification: the scan scope only included `SupraSValueFeedVerifier.sol`, not the
+calling contracts (`SupraOraclePull_V2`), so the validator saw `requireHashVerified_V2` as an
+isolated view function and couldn't confirm its return value actually reaches price storage and the
+lending flow — i.e. couldn't reconstruct the real attack path from the trimmed scan scope. Their
+call: "this should be treated as a genuine high-severity vulnerability caused by missing
+zero-signature and zero-public-key checks in `requireHashVerified_V2`." They recommend rerunning
+with the full Oracle call chain (interfaces + `SupraOraclePull_V2` + deployment context) included so
+the validator can trace reachability into the lending flow.
+- **Action**: rerun the scan with `scan/` expanded to include `context/pull-oracle/` (already
+  recovered — `SupraOraclePull_V2.sol` and related verified files) instead of
+  `SupraSValueFeedVerifier.sol` alone. Update Scan ID / Finding title once that run completes.
+
 ### Ultra — 2026-08-15 — MISSED (full miss, all three tiers)
 - Task ID: `ba918112-d3e0-5994-bd2c-8894495ab6e2`
 - 14 findings returned — the most thorough of the three scans, going deep on `requireVoteVerified`
