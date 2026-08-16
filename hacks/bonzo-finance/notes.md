@@ -93,10 +93,25 @@
 - Conclusion: **both Lite and Max missed the exploited vulnerability.** The real bug — no check
   that `_signature` or `committee_public_key[committee_id]` is non-zero before trusting
   `BLS.verifySingle`'s pairing result — never appears in either report, despite ground-truth
-  verified source (not a reconstruction) and a real, confirmed $9.05M loss. This is a genuine
-  challenge-relevant miss on both tiers, worth flagging separately from the claim itself per the
-  "misses are funded" note in rule 05 — worth asking in the challenge Discord whether/how to
-  report a confirmed two-tier miss like this, distinct from submitting a claim.
+  verified source (not a reconstruction) and a real, confirmed $9.05M loss.
+
+### Ultra — 2026-08-15 — MISSED (full miss, all three tiers)
+- Task ID: `ba918112-d3e0-5994-bd2c-8894495ab6e2`
+- 14 findings returned — the most thorough of the three scans, going deep on `requireVoteVerified`
+  / `requireHashVerified_V1` (cache-not-invalidated-on-rotation, cross-deployment replay, no
+  epoch-binding — findings 3, 4, 5, 8, 11), `processCluster`'s replay/round bookkeeping
+  (whole-transaction replay guard blocking siblings, equal-round overwrites, future-timestamp
+  check using the wrong field, non-price payloads accepted — findings 2, 6, 7, 9, 10, 12, 13, 14),
+  and the same `Ownable` init bug as Lite/Max (finding 1). **Not one of the 14 findings mentions
+  `requireHashVerified_V2` or references anywhere near line 315.** Every finding is real, and some
+  (14, Medium) are thoughtfully argued — but none of them is the bug that was actually exploited.
+- Conclusion: **complete miss across all three tiers — Lite, Max, and Ultra.** This is the
+  strongest miss case recovered so far: ground-truth verified source (not reconstructed), a
+  confirmed $9.05M real-world loss, an exact one-function root cause that's fully present and
+  reachable in the scanned file, and three independent scan tiers — including the most thorough
+  one available — all converge on a large, plausible-sounding set of *other* bugs while missing
+  the actual one. Strong candidate to report as a miss per rule 05 ("misses are funded") rather
+  than (or in addition to) pursuing further scanning — there's no fourth tier to escalate to.
 
 ## Attack walkthrough
 1. Attacker (`0x9A4966152F6e10b33Cb7a37975e8619816d6a494`) deposits 250 SAUCE (a few dollars) as
