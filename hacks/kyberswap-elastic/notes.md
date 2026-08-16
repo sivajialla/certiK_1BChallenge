@@ -39,18 +39,46 @@
   active liquidity for the new tick, so subsequent swap steps compute against stale liquidity/price
   state — the discrepancy an attacker can chain across repeated precise swaps to drain a pool.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
-- Why this finding is the bug: The finding must name the rounding-direction mismatch in
-  `estimateIncrementalLiquidity`'s `mulDivFloor` call (line 189) — the exact function whose deltaL
-  output feeds `calcFinalPrice`'s `nextSqrtP`, letting price overshoot a tick boundary that
-  `_updateLiquidityAndCrossTick` never gets triggered to account for. This is the single-line
-  root cause identified by BlockSec's independent technical writeup and matches the precise
-  precision-loss mechanism the attacker's crafted swap sequence exploited.
+- Scan ID: `cca35a4f-45f1-5168-815d-f12f2f85a5f9` (Lite)
+- Tier: Lite
+- Finding title (verbatim): Floor-Rounded Reinvestment Liquidity Undercharges Swaps and
+  Desynchronizes Tick Liquidity
+- Why this finding is the bug: The finding names `SwapMath.estimateIncrementalLiquidity`'s use of
+  `FullMath.mulDivFloor` for fee-derived `deltaL` in exact-input paths, and its "Attack path 2"
+  PoC reproduces the exact exploited mechanism: a token1 exact-input swap sized so the
+  floor-rounded `deltaL` makes `calcFinalPrice` overshoot the next initialized tick's `sqrtP`;
+  because the resulting price then doesn't exactly equal `nextSqrtP`, `Pool.swap` never calls
+  `_updateLiquidityAndCrossTick()`, leaving stale pre-crossing liquidity active against the new,
+  already-moved price. This is the same rounding-direction/tick-desync mechanism documented in
+  BlockSec's independent technical writeup and in this file's root-cause section.
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-16 — CAUGHT (first try)
+- Task ID: `cca35a4f-45f1-5168-815d-f12f2f85a5f9`
+- 5 findings returned:
+  1. [Major] Incorrect rounding in exact-output token0 swaps undercharges input
+     (`calcFinalPrice`, SwapMath.sol:268, `isToken0=true` exact-output branch) — a real, plausible
+     rounding-direction claim, but the opposite token/branch from the confirmed bug, and it
+     actually disagrees with the code's own inline rounding-direction comment rather than matching
+     it — not what was exploited.
+  2. [Minor] Unchecked intermediate overflow can revert exact-output swaps (QuadMath.sol
+     discriminant, DoS) — real but unrelated to the price-overshoot mechanism actually exploited.
+  3. [Medium] Unchecked `uint32` timestamp rollover reverts liquidity synchronization
+     (`_syncSecondsPerLiquidity`, Pool.sol:571) — real but unrelated.
+  4. [Minor] Bounded tick repair enables repeatable front-running DoS of liquidity mints
+     (`_updateTickList`, PoolTicksState.sol) — real but unrelated.
+  5. **[Major] Floor-Rounded Reinvestment Liquidity Undercharges Swaps and Desynchronizes Tick
+     Liquidity** (QuadMath.sol:8-14, but body explicitly discusses `SwapMath.estimateIncrementalLiquidity`'s
+     `mulDivFloor`) — **this is the exploited bug.** "Attack path 2" in the PoC matches the
+     confirmed mechanism exactly: floor-rounded `deltaL` → `calcFinalPrice` overshoots the next
+     tick → `sqrtP != nextSqrtP` → `_updateLiquidityAndCrossTick()` skipped → stale liquidity used
+     against the new price.
+- Conclusion: **Lite caught it on the first try.** Finding 5 is the claim. Including `Pool.sol` and
+  `PoolTicksState.sol` alongside `SwapMath.sol` in the scan bundle (per the bonzo-finance lesson on
+  reachability) likely helped the tool connect the rounding bug to the skipped
+  `_updateLiquidityAndCrossTick()` call — the exact cross-contract link that got a correct bonzo
+  finding marked invalid when it was scanned in isolation.
 
 ## Attack walkthrough
 1. Attacker flash-borrows a large amount of a token (e.g. ETHx) from an external source (Uniswap V3)
