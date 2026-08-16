@@ -29,6 +29,10 @@
 - Amount lost (digits only): 48000000 (capped at the $50M/hack scoring limit; real total loss per
   KyberSwap's own post-mortem was ~$56.2M in affected assets, ~$55.2M actually extracted, across all
   chains combined — DeFiLlama's hacks.csv separately lists $48M for this incident)
+- **AI Auditor-recorded amount: $187,500** — the platform's own claim record shows $187.5K, not the
+  $48M submitted. Not a simple $50M cap (that would leave $48M unchanged) — the actual scoring
+  formula behind this reduction (~256x) isn't documented anywhere we've seen; noting the real
+  recorded figure here since it's what actually counts toward score, not the submitted amount.
 - Root cause: `SwapMath.estimateIncrementalLiquidity` (scan/SwapMath.sol:169-216), specifically the
   `!isToken0` branch (185-193): the code comment says "we round up deltaL, to round down nextSqrtP,"
   but the implementation calls `FullMath.mulDivFloor` (rounds down) instead of a round-up variant.

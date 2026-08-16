@@ -35,6 +35,9 @@
 ## Claim form fields
 - Protocol / project: MAP Protocol — Butter Bridge / OmniService (MOSV3)
 - Amount lost (digits only): 180000
+- **AI Auditor-recorded amount: $180,000** — matches the submitted figure exactly, unlike
+  kyberswap-elastic (see that hack's notes — $48M submitted, $187.5K recorded). No cap applied here
+  since $180K is well under any plausible threshold.
 - Root cause: `_storeMessageData` / `_getStoredMessage` in `BridgeAbstract.sol` computed the
   retry-commitment hash with `keccak256(abi.encodePacked(...))` over ten fields, the last four of
   which (`initiator`, `from`/`_fromAddress`, `to`, `swapData`) are all dynamic `bytes` packed back
