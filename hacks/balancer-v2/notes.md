@@ -23,19 +23,31 @@
   0xdacf5fa19b1f720111609043ac67a9818262850c` — `ContractName: ComposableStablePool`, fully
   verified, full first-party dependency closure (52 files) resolved automatically, no proxy
   indirection or fix-commit archaeology needed
-- **trimmed for scan**: removed 15 files (~1,000 lines) of tangential boilerplate genuinely
-  unrelated to the rounding bug — EIP-2612 permit/signature machinery (`ERC20Permit.sol`,
-  `EIP712.sol`, `EOASignaturesValidator.sol`, `ISignaturesValidator.sol`, `IERC20Permit.sol`),
-  flash-loan/WETH interfaces (`IWETH.sol`, `IFlashLoanRecipient.sol`), and
-  pause/recovery-mode/governance-authorization plumbing (`RecoveryMode.sol`, `IRecoveryMode.sol`,
-  `TemporarilyPausable.sol`, `ITemporarilyPausable.sol`, `BasePoolAuthorization.sol`,
-  `IAuthorizer.sol`, `Authentication.sol`, `IAuthentication.sol`). These are still referenced by
-  import statements in the remaining files (e.g. `BasePool.sol` still inherits
-  `BasePoolAuthorization`/`RecoveryMode`/`TemporarilyPausable`) but left dangling on purpose — same
-  pattern already used successfully for `@openzeppelin/...` imports in kyberswap-elastic and
-  euler-v1's scan bundles. Kept: everything touching the swap/rounding path itself, the invariant
-  math, and the pool's own storage/rate/fee accounting siblings (rule 03/reachability). Final
-  bundle: 37 files, 7,919 lines (down from 52 files / 8,891 lines).
+- **trimmed for scan, aggressively (credit-conscious pass)**: cut down to the minimal set of
+  complete files that actually define and exercise the buggy code path — **7 files, 2,056 lines**
+  (down from the full 52-file/8,891-line closure, and a first trim to 37/7,919 before this pass):
+  `BaseGeneralPool.sol` (has `_swapGivenOut`, the exact vulnerable call site), `BasePool.sol`
+  (defines `_upscale`/`_downscaleUp`/`_downscaleDown`, the asymmetric rounding helpers, and is
+  `BaseGeneralPool`'s base class), `StableMath.sol` (the invariant `D` math the rounding error
+  corrupts), `FixedPoint.sol` (defines `mulDown`/`divUp`/`divDown`), `Math.sol` and
+  `BalancerErrors.sol` (direct dependencies of `FixedPoint`'s `_require` calls), `IGeneralPool.sol`
+  (small interface `BaseGeneralPool` implements).
+  - dropped this pass, beyond the first trim: `ComposableStablePool.sol` and its own
+    storage/rate/protocol-fee/amplification siblings (~2,300 lines), `IVault.sol` (772 lines),
+    `ERC20.sol`/`BalancerPoolToken.sol`/`WordCodec.sol`/`InputHelpers.sol` and several small
+    interfaces — none of these are read by `_swapGivenOut`, `_upscale`/`_downscale`, or
+    `StableMath`'s invariant computation directly; left as dangling imports (same pattern already
+    proven safe for `@openzeppelin/...` refs in kyberswap-elastic/euler-v1 and for the
+    permit/pause/governance files dropped in the first trim pass here)
+  - **known tradeoff, accepted deliberately for this pass**: this bundle no longer includes a
+    concrete deployed pool contract (`ComposableStablePool.sol`) using this swap path — only the
+    abstract base classes that define and implement the bug. Per the bonzo-finance lesson, a
+    scan scoped this tightly risks the validator being unable to confirm real-world reachability
+    (i.e. "is this actually deployed and callable, not just theoretical library code") the same
+    way it initially rejected a structurally-correct finding there. Chosen anyway this round to
+    conserve AI Auditor credits; if this scan's finding gets marked invalid/unclear on
+    reachability grounds, the fix is the same one that worked for bonzo — re-add
+    `ComposableStablePool.sol` (+ its direct siblings) and rescan.
 - confirmed present verbatim: `BaseGeneralPool._swapGivenOut` (scan/BaseGeneralPool.sol:68-85)
   upscales the requested output amount via `_upscale` (scan/BasePool.sol:680-686), which
   unconditionally calls `FixedPoint.mulDown` — the function's own doc comment (lines 681-684)
