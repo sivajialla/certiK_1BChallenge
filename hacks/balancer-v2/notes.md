@@ -83,7 +83,29 @@
   (BlockSec, Check Point Research, Trail of Bits, Certora) of the real attack.
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-17 — MISSED
+- Task ID: `5f95e281-caeb-5829-8e85-49140c496545`
+- 3 findings returned, all in `BasePool.sol`, none touching `_swapGivenOut`, `_upscale`,
+  `_downscaleUp`/`_downscaleDown`, or `StableMath`'s invariant math:
+  1. [Discussion] `queryExit` fails to simulate recovery-mode exits (`_queryAction`,
+     BasePool.sol:835-851) — real inconsistency between the query-simulation path and the actual
+     `onExitPool` recovery-mode branch, but unrelated to swap rounding.
+  2. [Discussion] `queryJoin` fails to simulate uninitialized-pool initialization
+     (`_queryAction`, BasePool.sol:453-463) — same class of query-vs-execution mismatch, for pool
+     initialization instead of recovery-mode exits. Unrelated.
+  3. [Info] Recovery-mode queries do not disable protocol fees (`queryJoin`/`_queryAction`,
+     BasePool.sol:846) — same family again (query paths don't mirror execution's
+     `inRecoveryMode()` fee override). Unrelated.
+- Conclusion: Lite did not surface the exploited vulnerability. All three findings cluster on a
+  different bug family entirely — query/simulation-vs-execution divergence in `BasePool.sol`'s
+  join/exit paths — rather than the swap-rounding asymmetry in `_swapGivenOut`/`_upscale` that was
+  actually exploited. Notably, `_upscale`/`_downscale` are literally present in this same file and
+  weren't flagged, which is consistent with (though doesn't prove) the reachability-risk tradeoff
+  already flagged above: without a concrete pool contract in scope, the model may have had less
+  signal pointing it at the swap path specifically. Per rule 03, escalate to Max next, same file
+  set — if Max also misses, the fallback is to re-add `ComposableStablePool.sol` and its direct
+  siblings and rescan.
 
 ## Attack walkthrough
 1. Attacker deploys an exploit contract (`0x54B53503c0e2173Df29f8da735fBd45Ee8aBa30d`) at block
