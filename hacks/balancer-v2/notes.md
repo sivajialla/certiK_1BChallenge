@@ -23,6 +23,19 @@
   0xdacf5fa19b1f720111609043ac67a9818262850c` — `ContractName: ComposableStablePool`, fully
   verified, full first-party dependency closure (52 files) resolved automatically, no proxy
   indirection or fix-commit archaeology needed
+- **trimmed for scan**: removed 15 files (~1,000 lines) of tangential boilerplate genuinely
+  unrelated to the rounding bug — EIP-2612 permit/signature machinery (`ERC20Permit.sol`,
+  `EIP712.sol`, `EOASignaturesValidator.sol`, `ISignaturesValidator.sol`, `IERC20Permit.sol`),
+  flash-loan/WETH interfaces (`IWETH.sol`, `IFlashLoanRecipient.sol`), and
+  pause/recovery-mode/governance-authorization plumbing (`RecoveryMode.sol`, `IRecoveryMode.sol`,
+  `TemporarilyPausable.sol`, `ITemporarilyPausable.sol`, `BasePoolAuthorization.sol`,
+  `IAuthorizer.sol`, `Authentication.sol`, `IAuthentication.sol`). These are still referenced by
+  import statements in the remaining files (e.g. `BasePool.sol` still inherits
+  `BasePoolAuthorization`/`RecoveryMode`/`TemporarilyPausable`) but left dangling on purpose — same
+  pattern already used successfully for `@openzeppelin/...` imports in kyberswap-elastic and
+  euler-v1's scan bundles. Kept: everything touching the swap/rounding path itself, the invariant
+  math, and the pool's own storage/rate/fee accounting siblings (rule 03/reachability). Final
+  bundle: 37 files, 7,919 lines (down from 52 files / 8,891 lines).
 - confirmed present verbatim: `BaseGeneralPool._swapGivenOut` (scan/BaseGeneralPool.sol:68-85)
   upscales the requested output amount via `_upscale` (scan/BasePool.sol:680-686), which
   unconditionally calls `FixedPoint.mulDown` — the function's own doc comment (lines 681-684)
