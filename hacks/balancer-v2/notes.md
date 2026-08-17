@@ -107,6 +107,41 @@
   set — if Max also misses, the fallback is to re-add `ComposableStablePool.sol` and its direct
   siblings and rescan.
 
+### Max — 2026-08-17 — MISSED (same trimmed 7-file bundle)
+- Task ID: `434ca2c5-b226-5e30-bfc2-c4d783b398b0`
+- 10 findings returned (`BasePool.sol` findings 1-6, `StableMath.sol` findings 7-10), none touching
+  `_swapGivenOut`, `_upscale`, or the `mulDown`-without-round-up-variant asymmetry actually
+  exploited:
+  1-6. [Minor/Info/Discussion] Various `_queryAction`/`queryJoin`/`queryExit`
+     simulation-vs-execution mismatches around recovery mode (fee handling, dispatch to
+     `_doRecoveryModeExit` vs `_onExitPool`, uninitialized-pool joins) — same family as the Lite
+     miss, real but unrelated.
+  7. **[Medium, closest match]** Join→single-token-exit round trip under-charges the pool vs an
+     equivalent swap (`_calcBptOutGivenExactTokensIn`, StableMath.sol:228-251) — a genuine,
+     related-class rounding/invariant bug, but a **different specific mechanism**: it exploits the
+     gap between the fee-adjusted invariant used to mint BPT at join time and the actual invariant
+     at a later single-token exit, reachable via `joinPool`+`exitPool` — not `_upscale`'s
+     unconditional round-down inside repeated `_swapGivenOut` calls via `batchSwap()`, which is the
+     confirmed real attack mechanism per BlockSec/Check Point/Trail of Bits/Certora.
+  8-10. [Discussion/Medium] `_calculateInvariant`/`_getTokenBalanceGivenInvariantAndAllOtherBalances`
+     DoS findings — zero-division on degenerate `P_D`, Newton-solver non-convergence, and
+     quadratic-intermediate overflow at extreme balances — real numerical-robustness issues, none
+     the exploited bug.
+- Conclusion: **Max also missed** on the trimmed 7-file bundle (no concrete pool contract in
+  scope — only the abstract `BaseGeneralPool`/`BasePool`/`StableMath` base classes). Consistent
+  with the reachability-risk tradeoff flagged when the bundle was trimmed. Next step: execute the
+  documented fallback — re-add `ComposableStablePool.sol` and its direct siblings
+  (`ComposableStablePoolStorage.sol`, `ComposableStablePoolRates.sol`,
+  `ComposableStablePoolProtocolFees.sol`, `StablePoolAmplification.sol`) to give the scanner a
+  concrete deployed contract and the `batchSwap`-reachable call chain, then rescan.
+- **Fallback applied 2026-08-17**: restored `ComposableStablePool.sol` + its 4 direct siblings,
+  plus their genuinely-needed rate/fee/invariant dependencies (`PriceRateCache.sol`,
+  `ProtocolFeeCache.sol`, `InvariantGrowthProtocolSwapFees.sol`, `IRateProvider.sol`, `IERC20.sol`,
+  `InputHelpers.sol`, `SafeCast.sol`) — still leaving permit/pause/governance/Vault-interface
+  boilerplate dangling (same proven pattern from the earlier trims). New bundle: **19 files, 5,147
+  lines** (up from 7/2,056, still well under the original 52/8,891). Ready for a fresh Lite/Max
+  run.
+
 ## Attack walkthrough
 1. Attacker deploys an exploit contract (`0x54B53503c0e2173Df29f8da735fBd45Ee8aBa30d`) at block
    23717397, built around an auxiliary local replica of Balancer's `StableMath` to simulate swap
