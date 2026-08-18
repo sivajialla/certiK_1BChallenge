@@ -31,20 +31,35 @@
   attacker-controlled from the route data — pulling tokens from any user who has an outstanding
   ERC20 approval to RouteProcessor2, straight to the attacker's fake pool contract.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
-- Why this finding is the bug: The finding must name `swapUniV3`/`uniswapV3SwapCallback`'s missing
-  validation that `pool` is a genuine, factory-deployed Uniswap V3 pool — the check only verifies
-  `msg.sender == lastCalledPool`, a value the attacker's own malicious contract caused
-  RouteProcessor2 to set on itself, letting the attacker's `uniswapV3SwapCallback` invocation pass
-  and pull approved tokens from any RouteProcessor2 user via `safeTransferFrom`. This is the exact
-  mechanism named across every independent writeup (SharkTeam, CertiK, Hacken, SolidityScan,
-  Sushi's own post-mortem) and matches the contract's own doc-comment warning that was never
-  actually implemented in code.
+- Scan ID: `13d35d7a-ec87-52fc-a9f7-5063934bcfd3` (Lite)
+- Tier: Lite
+- Finding title (verbatim): Unvalidated Pool Targets Enable Unauthorized Asset and Allowance
+  Drains
+- Why this finding is the bug: The finding names `swapUniV3`'s unvalidated `lastCalledPool` set
+  and `uniswapV3SwapCallback`'s insufficient `msg.sender == lastCalledPool` check exactly, and
+  states directly that "a malicious pool can request any ERC-20 from a victim with an existing
+  RouteProcessor2 allowance." Its "Attack path 1" PoC — deploy a fake pool, route through
+  `swapUniV3`, call back into `uniswapV3SwapCallback` with forged `(targetToken, victim)` data to
+  drain the victim's approved tokens — reproduces the real April 2023 exploit exactly, matching
+  every independent writeup (SharkTeam, CertiK, Hacken, SolidityScan, Sushi's own post-mortem).
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-18 — CAUGHT (first try)
+- Task ID: `13d35d7a-ec87-52fc-a9f7-5063934bcfd3`
+- 16 findings returned, all in `RouteProcessor2.sol`:
+  1-13, 15-16. Real but unrelated findings — a large cluster around draining *pre-existing*
+     router-held balances (dust, accidentally-transferred tokens, stranded ETH/Bento shares) via
+     various unvalidated command paths (`processMyERC20`, `processInsideBento`, `bentoBridge`,
+     fake-wrap/unwrap flags, etc.). All real bugs, but a different mechanism from the actual
+     exploit — the historical attack drained *user-approved* balances via a forged pool callback,
+     not the router's own residual balances.
+  14. **[Critical] Unvalidated Pool Targets Enable Unauthorized Asset and Allowance Drains** — **this
+     is the exploited bug.** Names `swapUniV3`/`swapTridentCL`'s missing pool validation and the
+     callbacks' insufficient `msg.sender == lastCalledPool` check exactly, explicitly states a
+     malicious pool can drain a victim's existing RouteProcessor2 allowance, and its PoC matches
+     the real attack precisely.
+- Conclusion: Lite caught it. Finding 14 is the claim.
 
 ## Attack walkthrough
 1. Attacker identifies that any user who has approved `RouteProcessor2` to spend their tokens
