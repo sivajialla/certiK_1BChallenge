@@ -39,20 +39,38 @@
   on the victim Safe's behalf believing it's following a legitimate, permissioned delegate's
   instructions, when it's actually following the attacker's forged claim about who that delegate is.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
-- Why this finding is the bug: The finding must name `_executeWithToken`'s string-form
-  `sourceAddress` check as insufficient proof of a genuine bridged transfer, and/or
-  `_processPayload`'s trust in an attacker-supplied `delegate` address that `_checkPermission`
-  then validates using that claimed identity's real permissions rather than verifying the caller's
-  actual identity. This is the exact "forged express payload" / confused-deputy mechanism
-  documented by DarkNavy and Common Prefix's independent technical writeups, and matches the real
-  attack: three fake `expressExecuteWithToken` calls with zero bridged amount, each impersonating a
-  permissioned delegate to approve tokens, authorize Permit2, then force a full-balance swap.
+- Scan ID: `29c579da-8be5-546f-b72b-290608984801` (Lite)
+- Tier: Lite
+- Finding title (verbatim): Forged Axelar Express Payloads Enable Unauthorized Safe Delegate
+  Actions
+- Why this finding is the bug: The finding names the exact confused-deputy mechanism — `_executeWithToken`
+  treats the attacker-controlled `sourceAddress` as authentication before real gateway validation,
+  `_processPayload` transfers the supplied token amount to the attacker-named Safe, and
+  `_handleActions` validates permissions for the forged `delegate` rather than the actual caller —
+  and its scenario is precisely the real attack: an attacker uses Express execution with
+  `sourceAddress` set to `squidRouter`, forges a payload naming a real Safe and one of its
+  legitimate delegates, and executes delegate-authorized swaps through attacker-controlled routes.
+  This matches DarkNavy and Common Prefix's independent technical writeups exactly.
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-18 — CAUGHT (first try)
+- Task ID: `29c579da-8be5-546f-b72b-290608984801`
+- 3 findings returned:
+  1. **[Critical] Forged Axelar Express Payloads Enable Unauthorized Safe Delegate Actions**
+     (SquidRouterModule.sol, `_executeWithToken`/`_processPayload`/`_handleActions`) — **this is
+     the exploited bug.** Names the exact chain: attacker-controlled `sourceAddress` treated as
+     authentication, forged `delegate` from payload, permission check validates the impersonated
+     delegate's real permissions rather than the caller's identity.
+  2. [Medium] UniV2 swap handlers incorrectly encode paths as `bytes` instead of `address[]`
+     (`_handleUniV2SwapExactIn`/`_handleUniV2SwapExactOut`) — a real, separate coding bug that
+     would cause standard V2 swaps to revert; unrelated to the exploited access-control gap.
+  3. [Major] Public Squid bridge calls can forge delegate authorization for Safe actions — an
+     independent, corroborating description of the same underlying confused-deputy vulnerability
+     via the public `bridgeCall` entry path rather than Express execution specifically; also a
+     valid match, secondary to Finding 1.
+- Conclusion: Lite caught it. Finding 1 is the claim (Finding 3 independently corroborates the same
+  root cause).
 
 ## Attack walkthrough
 1. Attacker identifies that `SquidRouterModule` inherits Axelar's `expressExecuteWithToken` —
