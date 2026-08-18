@@ -50,18 +50,43 @@
   a `DepositRecord` with an attacker-chosen `amount` anyway — which the bridge relayers then honor,
   minting real value on the destination chain against nothing.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
-- Why this finding is the bug: The finding must name the asymmetry between `Bridge.deposit`
-  (generic, no value pre-transfer) and `Bridge.depositETH` (validates and pre-transfers real WETH)
-  combined with `ERC20Handler.deposit`'s unconditional skip for `tokenAddress == _wtokenAddress` —
-  the exact "wrong trust assumption" (per Halborn/ChainSafe's independent writeups) that let the
-  attacker call the generic deposit path directly with the WETH resourceID and an arbitrary forged
-  amount, recording a fully-unbacked deposit that the bridge later honored.
+- Scan ID: `c7fd103e-eb8a-5a6f-8525-ea6b54f86cb2` (Max)
+- Tier: Max
+- Finding title (verbatim): Plain WETH Deposits Mint Unbacked Cross-Chain Claims and Drain
+  Destination Reserves
+- Why this finding is the bug: The finding names the exact mechanism — `Bridge.deposit` is
+  permissionless and accepts any resourceID (including WETH's) with no value pre-transfer, while
+  `ERC20Handler.deposit`'s `if (tokenAddress != _wtokenAddress)` guard skips locking/burning for
+  WETH, assuming (only true via `depositETH`) that WETH was already transferred. Its "unbacked
+  payout" attack-path PoC — pay only the flat fee, encode an arbitrary WETH amount, let the
+  destination-side proposal pay it out via `IWETH.withdraw`/`safeTransferETH` from the shared
+  reserve — matches the real, on-chain-confirmed attack exactly.
 
 ## AI Auditor scan log
-(not yet run)
+
+### Max — 2026-08-18 — CAUGHT
+- Task ID: `c7fd103e-eb8a-5a6f-8525-ea6b54f86cb2`
+- 24 findings returned across `Bridge.sol` (1-7) and `ERC20Handler.sol` (8-24):
+  - **Finding 3 [Major] Plain WETH Deposits Mint Unbacked Cross-Chain Claims and Drain Destination
+    Reserves** (Bridge.sol:480-492 / ERC20Handler.sol:474-521) — **this is the exploited bug.**
+    Names `Bridge.deposit`'s missing value pre-transfer and `ERC20Handler.deposit`'s WETH skip
+    branch exactly; PoC matches the real attack step-for-step.
+  - Finding 6 [Critical] Non-Canonical Calldata Offsets Enable Unbacked WETH Deposit Records — a
+    related but different, more exotic mechanism (manipulating ABI dynamic-bytes offsets so
+    `depositETH`'s value check and the handler's decoded amount diverge) rather than simply calling
+    `deposit()` directly, which is what actually happened.
+  - Findings 1, 2, 5, 7 — governance/quorum risks around `adminSetResource`, relayer threshold
+    changes, and `cancelProposal` — real design questions, unrelated to the exploited path.
+  - Findings 8-21 — a large cluster of fee-on-transfer/rebasing-token accounting findings
+    (`lockERC20`/`releaseERC20` not measuring balance deltas) — a genuine, distinct bug class, not
+    what was exploited (Meter's WETH isn't fee-on-transfer).
+  - Findings 22, 24 — `fundERC20`'s missing access control (permissionless allowance drain) — real
+    but different from the exploited deposit-path bug; Finding 22 does connect it *to* the WETH
+    skip-branch as one possible funding source, but the actual historical attack didn't need
+    `fundERC20` at all (the handler already held real WETH from legitimate `depositETH` users).
+  - Finding 23 — destination-chain WETH reserve availability/liquidity-management gap — real
+    operational risk, not the exploited bug.
+- Conclusion: Max caught it. Finding 3 is the claim.
 
 ## Attack walkthrough
 1. Attacker identifies that `Bridge.deposit(destinationChainID, resourceID, data)` — the generic,
