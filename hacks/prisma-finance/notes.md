@@ -38,19 +38,37 @@
   collateral/debt figures, entirely bypassing `migrateTrove()`'s legitimate ownership and
   debt-existence checks (lines 92-97).
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
-- Why this finding is the bug: The finding must name `onFlashLoan`'s missing check that the
-  flashloan was actually initiated by `MigrateTroveZap` itself (via `migrateTrove`), rather than by
-  an arbitrary caller invoking `debtToken.flashLoan()` directly with `MigrateTroveZap` as the
-  receiver and forged `data`. This is the exact mechanism every independent writeup (Olympix,
-  ImmuneBytes, ZAN, SharkTeam, CertiK, CUBE3) converges on, and matches the real attack's structure:
-  a small legitimate trove opened first, then `flashLoan` called directly to trigger `onFlashLoan`
-  with forged parameters that hijack a much larger trove's collateral.
+- Scan ID: `8a78c0e8-b1f9-5cfc-80c1-fabff41d8875` (Lite)
+- Tier: Lite
+- Finding title (verbatim): Forged ERC-3156 Callbacks Can Force Trove Migrations and Strand
+  Collateral
+- Why this finding is the bug: The finding names `onFlashLoan`'s missing validation exactly — it
+  checks only `msg.sender == address(debtToken)` and never validates the ERC-3156 `initiator`,
+  loan `token`, or that the decoded callback data belongs to an active `migrateTrove` request.
+  Its "Attack path 1" describes calling `debtToken.flashLoan` directly with `MigrateTroveZap` as
+  receiver and forged callback data naming a victim account — precisely the mechanism every
+  independent writeup (Olympix, ImmuneBytes, ZAN, SharkTeam, CertiK, CUBE3) converges on as the
+  real exploited root cause.
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-18 — CAUGHT (first try)
+- Task ID: `8a78c0e8-b1f9-5cfc-80c1-fabff41d8875`
+- 3 findings returned:
+  1. [Medium] Migration ignores pending trove rewards (`migrateTrove`, MigrateTroveZap.sol:96-116)
+     — real accounting edge case (stale `coll`/`debt` snapshot vs. pending rewards applied at
+     close), but not the exploited mechanism.
+  2. [Discussion/Info] Incorrect collateral routing assumption leads to migration DoS and theft of
+     stuck funds (`onFlashLoan`, MigrateTroveZap.sol:80-81) — a hedged, unconfirmed design
+     question about whether `closeTrove` routes collateral to the Zap or the account; explicitly
+     flagged by the tool as unresolved without the `BorrowerOperations` implementation. Different
+     issue from the exploited one.
+  3. **[Major] Forged ERC-3156 Callbacks Can Force Trove Migrations and Strand Collateral**
+     (`onFlashLoan`, MigrateTroveZap.sol:62-84) — **this is the exploited bug.** Names the missing
+     `initiator`/`token`/context validation in `onFlashLoan` exactly, and its PoC (call
+     `debtToken.flashLoan` directly with the zap as receiver and forged data naming a victim) is
+     the real attack's structure.
+- Conclusion: Lite caught it. Finding 3 is the claim.
 
 ## Attack walkthrough
 1. Attacker opens a small, legitimate Trove (e.g. 1 wstETH collateral, 2,000 mkUSD debt) via the
