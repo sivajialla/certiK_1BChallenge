@@ -53,9 +53,10 @@
   explicit `require(maxDiff <= 500, ...)` check enforcing repay-value and borrow-value stay within
   5% of each other.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
+- Scan ID: `0bad79fc-d804-5dfc-be4c-7fd32cdc92f2` (Lite)
+- Tier: Max (Lite already run and missed, see below)
+- Finding title (verbatim): <fill in once a finding names the missing value-parity check between
+  `_repayAmount` and `_borrowAmount`>
 - Why this finding is the bug: The finding must name `swapDebtParaSwap`'s missing check that the
   repaid value (`_repayAmount`) is commensurate with the newly-borrowed value (`_borrowAmount`) —
   the function borrows first, lets an attacker-controlled external call determine what (if
@@ -65,7 +66,35 @@
   Sigma) and matches the confirmed pre-incident facet source recovered above.
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-18 — MISSED
+- Task ID: `0bad79fc-d804-5dfc-be4c-7fd32cdc92f2`
+- 17 findings returned across `Pool.sol` (1-6), `SolvencyMethods.sol` (7-9),
+  `AssetsOperationsFacet.sol` (10-15), and `SolvencyFacetProd.sol` (16-17). None name the missing
+  value-parity check between `_repayAmount` and `_borrowAmount` that was actually exploited:
+  1-9, 16-17. Real but unrelated findings — fee-on-transfer accounting gaps across `Pool.sol`,
+     lock-array gas-DoS, rewarder-migration desync, exposure-accounting rounding issues in
+     `SolvencyMethods.sol`, Uniswap V3 fee-omission and stake-query fail-open issues in
+     `SolvencyFacetProd.sol`. None touch `swapDebtParaSwap`'s value-parity gap.
+  10. **[Major, closest match] Unaccounted Residual ParaSwap Input Tokens Corrupt Exposure
+     Accounting** (AssetsOperationsFacet.sol:278-294, quotes `swapDebtParaSwap` verbatim) —
+     correctly flags that neither the router's return data nor the `toToken` balance delta is
+     validated, but frames the consequence as **exposure-accounting bookkeeping corruption** from
+     residual `toToken` left *in the loan* (an unspent-approval scenario), not as the attacker
+     *diverting* the borrowed value to their own contract while `_repayAmount` gets silently
+     clamped to near-zero. Same function, same "missing validation" category, but a materially
+     different failure mode from what was actually exploited — the real attack extracts economic
+     value the account never repays, not a bookkeeping desync from leftover approved tokens.
+  11. [Medium] Unvalidated Swap Route Bypasses Asset Exposure Accounting — targets `swapDebt`
+     (the separate YieldYak-router variant), not `swapDebtParaSwap`. Different function, different
+     path, though a related "swap output not validated" theme.
+  13. [Medium] Same-Asset Debt Swaps Desynchronize Exposure Accounting — a same-asset
+     (`_fromAsset == _toAsset`) edge case in the shared `_processRepay` helper, not the general
+     value-parity gap.
+  14, 15 — Redstone-marker/exposure-accounting findings on `fund`/`notifyVPrimeController`, also
+     unrelated.
+- Conclusion: Lite did not surface the exploited vulnerability. Per rule 03, escalate to Max next,
+  same file set.
 
 ## Attack walkthrough
 1. Attacker flash-loans ~59.958 WETH, deposits it as collateral into a freshly-created SmartLoan
