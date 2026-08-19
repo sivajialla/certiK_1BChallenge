@@ -69,6 +69,27 @@ Notes:
 - "Capped" means the real-world loss exceeded the $50M/hack scoring cap (rule 04), so the submitted figure is the cap itself, not the actual loss.
 - Going forward, new candidates are screened for a small, single-file (or near-single-file) bug location to keep scan credit cost low, and Max is only run when explicitly requested rather than auto-escalated.
 
+## Sources
+
+Primary postmortem/technical writeup per hack. Full source lists (all writeups, on-chain tx hashes, ground-truth contract addresses) are in each hack's `notes.md` under its own `## Sources` section.
+
+| Protocol | Primary postmortem / writeup |
+|---|---|
+| [butter-bridge](hacks/butter-bridge/notes.md) | MAP Protocol official post-mortem — https://x.com/MapProtocol/status/2059587998409490510 |
+| [drips-network](hacks/drips-network/notes.md) | Verichains — https://blog.verichains.io/p/drips-network-when-giving-became |
+| [kyberswap-elastic](hacks/kyberswap-elastic/notes.md) | Official post-mortem — https://blog.kyberswap.com/post-mortem-kyberswap-elastic-exploit/ |
+| [euler-v1](hacks/euler-v1/notes.md) | Omniscia (Euler's own post-mortem writeup) — https://medium.com/@omniscia.io/euler-finance-incident-post-mortem-1ce077c28454 |
+| [prisma-finance](hacks/prisma-finance/notes.md) | Official post-mortem — https://hackmd.io/@PrismaRisk/PostMortem0328 |
+| [meter-bridge](hacks/meter-bridge/notes.md) | Halborn — https://www.halborn.com/blog/post/explained-the-meter-io-hack-february-2022 |
+| [new-market-trading](hacks/new-market-trading/notes.md) | DarkNavy — https://www.darknavy.org/web3/exploits/new-market-trading-squid-router-module-forged-express-payload/ |
+| [sushiswap](hacks/sushiswap/notes.md) | Sushi's own post-mortem — https://www.sushi.com/blog/routeprocessor2-post-mortem |
+| [solvbtc](hacks/solvbtc/notes.md) | DarkNavy — https://www.darknavy.org/web3/exploits/solv-bro-double-mint/ |
+| [bonzo-finance](hacks/bonzo-finance/notes.md) | Bonzo's own incident report — https://bonzo.finance/blog/bonzo-lend-incident-report-oracle-provider-exploit |
+| [balancer-v2](hacks/balancer-v2/notes.md) | BlockSec — https://blocksec.com/blog/in-depth-analysis-the-balancer-v2-exploit |
+| [deltaprime](hacks/deltaprime/notes.md) | Official post-mortem — https://medium.com/@DeltaPrimeDefi/deltaprime-post-mortem-reimbursement-plan-07-12-2024-2d654912715b |
+| [raft](hacks/raft/notes.md) | ImmuneBytes — https://immunebytes.com/blog/raft-protocol-exploit-nov-10-2023-detailed-analysis/ |
+| [mango-markets](hacks/mango-markets/notes.md) | SEC press release (charging documents) — https://www.sec.gov/newsroom/press-releases/2023-13 |
+
 ## Rules that bite
 
 - Scan the pre-incident implementation, never today's.
