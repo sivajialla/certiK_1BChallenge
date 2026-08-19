@@ -32,19 +32,35 @@
   through `onERC721Received`, which is a completely separate, unprotected entry point that reaches
   the same `_mint` logic.
 - Smart contract bug? Yes
-- Scan ID: <pending>
-- Tier: <pending — start Lite>
-- Finding title (verbatim): <pending>
-- Why this finding is the bug: The finding must name the missing `nonReentrant` guard on
-  `onERC721Received` (and/or `onERC3525Received`) combined with `mint()`'s full-balance deposit
-  path (`doSafeTransferIn`) triggering that callback on the contract itself — the exact mechanism
-  by which a single `mint()` call credits the depositor twice for the same SFT value: once inside
-  the transfer callback, once in the outer function's continuation. This matches every independent
-  writeup (Olympix, DarkNavy, Verichains, Halborn, QuillAudits) and the real attack, which looped
-  this 22 times to inflate 135 BRO into ~567.8M BRO.
+- Scan ID: `bf526001-63d3-5080-b25c-e454e1c7ade9` (Lite)
+- Tier: Lite
+- Finding title (verbatim): ERC-3525 Deposit Callbacks Double-Mint Wrapper Shares
+- Why this finding is the bug: The finding names the exact mechanism — both `onERC3525Received`
+  and `onERC721Received` mint wrapper shares inside the ERC-3525/ERC-721 transfer callback
+  triggered by `mint()`'s `doTransferIn`/`doSafeTransferIn`, and then `mint()` mints the same
+  calculated share amount again once the transfer returns. Its "Attack path 2" (full-SFT deposit
+  via `doSafeTransferIn` → `onERC721Received`) reproduces the real attack exactly — looped 22 times
+  to inflate 135 BRO into ~567.8M BRO — matching every independent writeup (Olympix, DarkNavy,
+  Verichains, Halborn, QuillAudits).
 
 ## AI Auditor scan log
-(not yet run)
+
+### Lite — 2026-08-19 — CAUGHT (first try)
+- Task ID: `bf526001-63d3-5080-b25c-e454e1c7ade9`
+- 5 findings returned:
+  1. [Discussion] `getValueByShares` applies the exchange rate in the wrong direction — real
+     inverse-conversion bug in a view function, unrelated to the exploited path.
+  2. [Discussion] Mutable underlying decimals can change wrapper redemption economics — real but
+     conditional/unconfirmed design question, unrelated.
+  3. [Medium] Valid token ID zero corrupts holding token accounting (`holdingValueSftId` sentinel
+     collision) — real accounting bug, unrelated to the double-mint mechanism.
+  4. [Minor] Sub-threshold ERC-3525 deposits accepted without minting wrapped tokens — real
+     rounding/dust-loss issue, opposite problem (depositor gets *too few* shares), unrelated.
+  5. **[Critical] ERC-3525 Deposit Callbacks Double-Mint Wrapper Shares** — **this is the exploited
+     bug.** Names both `onERC3525Received` and `onERC721Received` minting inside the transfer
+     callback, followed by `mint()` minting again after the transfer returns. Attack path 2 in the
+     PoC matches the real exploit precisely.
+- Conclusion: Lite caught it. Finding 5 is the claim.
 
 ## Attack walkthrough
 1. Attacker acquires or holds a small amount (135.36 BRO-equivalent) of the underlying ERC-3525
